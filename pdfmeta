@@ -1,0 +1,83 @@
+#!/bin/sh
+
+NEW_TITLE=""
+NEW_AUTHOR=""
+
+if [ $# -lt 1 ]; then
+	echo "Usage $0 pdf-file [new-title] [new-author]" 1>&2
+	exit 1
+fi
+
+if [ $# -lt 2 ]; then
+	DOCUMENT=$1
+fi
+
+if [ $# -lt 3 ]; then
+	DOCUMENT=$1
+	NEW_TITLE=$2
+fi
+
+if [ $# -lt 4 ]; then
+	DOCUMENT=$1
+	NEW_TITLE=$2
+	NEW_AUTHOR=$3
+fi
+
+INFOFILE=$(mktemp)
+
+pdftk "${DOCUMENT}" dump_data > "${INFOFILE}"
+
+TITLE_KEY_LINE=$(awk '/InfoKey: Title/ { print NR }' "${INFOFILE}")
+
+if [ -n "$TITLE_KEY_LINE" ]; then
+	TITLE_VALUE_LINE=$((TITLE_KEY_LINE + 1))
+	CURR_TITLE=$(awk -F ': ' -v x=${TITLE_VALUE_LINE} 'NR==x { print $2 }' "${INFOFILE}")
+	echo "current title: ${CURR_TITLE}"
+else
+	echo "current title:"
+fi
+
+AUTHOR_KEY_LINE=$(awk '/InfoKey: Author/ { print NR }' "${INFOFILE}")
+
+if [ -n "$AUTHOR_KEY_LINE" ]; then
+	AUTHOR_VALUE_LINE=$((AUTHOR_KEY_LINE + 1))
+	CURR_AUTHOR=$(awk -F ': ' -v x=${AUTHOR_VALUE_LINE} 'NR==x { print $2 }' "${INFOFILE}")
+	echo "current author: ${CURR_AUTHOR}"
+else
+	echo "current author:"
+fi
+
+if [ -n "$NEW_TITLE" ]; then
+	if [ -n "$TITLE_VALUE_LINE" ]; then
+		sed -i "${TITLE_VALUE_LINE} s/^.*$/InfoValue: ${NEW_TITLE}/" "${INFOFILE}"
+	else
+		echo "InfoBegin" >> "${INFOFILE}"
+		echo "InfoKey: Title" >> "${INFOFILE}"
+		echo "InfoValue: ${NEW_TITLE}" >> "${INFOFILE}"
+	fi
+	echo "new title: ${NEW_TITLE}"
+fi
+
+if [ -n "$NEW_AUTHOR" ]; then
+	if [ -n "$AUTHOR_VALUE_LINE" ]; then
+		sed -i "${AUTHOR_VALUE_LINE} s/^.*$/InfoValue: ${NEW_AUTHOR}/" "${INFOFILE}"
+	else
+		echo "InfoBegin" >> "${INFOFILE}"
+		echo "InfoKey: Author" >> "${INFOFILE}"
+		echo "InfoValue: ${NEW_AUTHOR}" >> "${INFOFILE}"
+	fi
+	echo "new author: ${NEW_AUTHOR}"
+fi
+
+if [ -n "$NEW_TITLE" ]; then
+	NEW_DOCUMENT=$(mktemp)
+	if pdftk "${DOCUMENT}" update_info "${INFOFILE}" output "${NEW_DOCUMENT}" ; then
+		mv "${NEW_DOCUMENT}" "${DOCUMENT}"
+		rm "${INFOFILE}"
+	else
+		echo "Updating info failed" 1>&2
+		exit 2
+	fi
+else
+	rm "${INFOFILE}"
+fi

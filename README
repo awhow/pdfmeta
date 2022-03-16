@@ -1,0 +1,5 @@
+Update PDF Title and Author from the commandline
+
+Usage:
+
+    pdfmeta pdf-file [new-title] [new-author]
